@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import PassengerForm from "./PassengerForm";
+import { useNotification } from "./NotificationContext";
 
 interface Seat {
   id: number;
@@ -13,11 +14,14 @@ interface Seat {
 interface User {
   id: number;
   name: string;
+  username: string;
+  email: string;
 }
 
 const SeatMap: React.FC = () => {
-  const [seats, setSeats] = useState<Seat[]>(
-    Array.from({ length: 38 }, (_, i) => ({
+  const { showNotification } = useNotification();
+  const [seats] = useState<Seat[]>(
+    Array.from({ length: 84 }, (_, i) => ({
       id: i + 1,
       isOccupied: i < 10,
     }))
@@ -33,6 +37,14 @@ const SeatMap: React.FC = () => {
   const [occupantNames, setOccupantNames] = useState<Record<number, string>>(
     {}
   );
+
+  const [hoveredSeat, setHoveredSeat] = useState<number | null>(null);
+
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    setTooltipPosition({ x: e.clientX, y: e.clientY });
+  };
 
   useEffect(() => {
     fetch("https://jsonplaceholder.typicode.com/users")
@@ -82,45 +94,72 @@ const SeatMap: React.FC = () => {
   const handleSeatClick = (id: number) => {
     const seat = seats.find((s) => s.id === id);
     if (seat?.isOccupied) {
-      alert("Bu koltuk dolu.");
+      showNotification("Bu koltuk dolu.", "error");
       return;
     }
     if (selectedSeats.includes(id)) {
       setSelectedSeats(selectedSeats.filter((seatId) => seatId !== id));
     } else {
       if (selectedSeats.length >= 3) {
-        alert("En fazla 3 koltuk seçebilirsiniz.");
+        showNotification("En fazla 3 koltuk seçebilirsiniz.", "warning");
         return;
       }
       setSelectedSeats([...selectedSeats, id]);
     }
   };
 
+  const handleCompleteBooking = () => {
+    if (selectedSeats.length === 0) {
+      showNotification("Lütfen en az bir koltuk seçiniz.", "warning");
+      return;
+    }
+
+    // Seçili koltuk sayısı kadar form doldurulmuş mu kontrol et
+    const filledForms = Object.keys(occupantNames).length;
+    if (filledForms < selectedSeats.length) {
+      showNotification("Lütfen tüm yolcu bilgilerini doldurunuz.", "warning");
+      return;
+    }
+
+    showNotification(
+      "Rezervasyon işleminiz başarıyla tamamlanmıştır.",
+      "success"
+    );
+  };
+
   return (
     <div className="container mx-auto p-8 flex justify-between gap-12">
       <div className="flex-1 flex flex-col items-center">
-        <div className="relative w-[600px]">
+        <div className="relative w-[400px]">
           <Image
             src="/airplane.svg"
             alt="Airplane"
-            width={450}
-            height={400}
+            width={400}
+            height={600}
             className="mx-auto"
           />
-          <svg viewBox="0 0 500 400" className="absolute top-0 left-0">
+          <svg viewBox="0 0 400 600" className="absolute top-0 left-0">
             {seats.map((seat, index) => {
               const row = Math.floor(index / 4);
               const col = index % 4;
-              const x = col < 2 ? 180 + col * 20 : 380 + (col - 2) * 20;
-              const y = 200 + row * 25;
+
+              let x = 168;
+
+              if (col < 2) {
+                x += col * 9;
+              } else {
+                x += 25 + (col - 2) * 9;
+              }
+
+              const y = 60 + row * 12 + (row >= 4 ? 12 : 0);
 
               return (
                 <g key={seat.id}>
                   <rect
                     x={x}
                     y={y}
-                    width={8}
-                    height={12}
+                    width={7}
+                    height={9}
                     fill={
                       seat.isOccupied
                         ? "#e5e5e5"
@@ -132,61 +171,105 @@ const SeatMap: React.FC = () => {
                     strokeWidth={1}
                     onClick={() => handleSeatClick(seat.id)}
                     cursor={seat.isOccupied ? "not-allowed" : "pointer"}
+                    rx={1}
+                    ry={1}
+                    onMouseEnter={() => setHoveredSeat(seat.id)}
+                    onMouseLeave={() => setHoveredSeat(null)}
+                    onMouseMove={handleMouseMove}
                   />
-                  {seat.isOccupied && (
-                    <title>{occupantNames[seat.id] || "Dolu"}</title>
-                  )}
                 </g>
               );
             })}
           </svg>
+
+          {hoveredSeat &&
+            seats.find((s) => s.id === hoveredSeat)?.isOccupied && (
+              <div
+                className="absolute z-50 bg-black text-white px-3 py-2 rounded-lg text-sm pointer-events-none"
+                style={{
+                  left: tooltipPosition.x + 10,
+                  top: tooltipPosition.y + 10,
+                  transform: "translate(-50%, -100%)",
+                }}
+              >
+                {occupantNames[hoveredSeat]}
+              </div>
+            )}
         </div>
         <div className="flex gap-6 mt-8">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-[#e5e5e5] border border-[#d1d1d1]" />
-            <span className="text-sm">Dolu</span>
+            <span className="text-sm text-black">Dolu</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-white border border-[#d1d1d1]" />
-            <span className="text-sm">Boş</span>
+            <span className="text-sm text-black">Boş</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-[#ffc95b] border border-[#d1d1d1]" />
-            <span className="text-sm">Seçili</span>
+            <span className="text-sm text-black">Seçili</span>
           </div>
         </div>
       </div>
 
       <div className="w-[320px] space-y-4">
-        {[1, 2, 3].map((num) => (
-          <div key={num} className="space-y-2">
+        {selectedSeats.map((seatId, index) => (
+          <div key={seatId} className="space-y-2">
             <div
-              onClick={() => setShowPassengerForm(num)}
+              onClick={() =>
+                setShowPassengerForm(
+                  showPassengerForm === index + 1 ? null : index + 1
+                )
+              }
               className="flex items-center justify-between px-4 py-3 bg-[#c6c6c6] cursor-pointer rounded"
             >
-              <span className="text-black font-medium">{num}. Yolcu</span>
-              <ArrowRight className="text-white" size={20} />
+              <span className="text-black font-medium">{index + 1}. Yolcu</span>
+              <ArrowDown
+                className={`text-white transition-transform ${
+                  showPassengerForm === index + 1 ? "rotate-180" : ""
+                }`}
+                size={20}
+              />
             </div>
-            {showPassengerForm === num && (
+            {showPassengerForm === index + 1 && (
               <PassengerForm
-                passengerNumber={num}
-                onClose={() => setShowPassengerForm(null)}
+                passengerNumber={index + 1}
+                selectedSeat={seatId}
               />
             )}
           </div>
         ))}
 
-        <button className="w-full py-3 bg-[#c6c6c6] rounded font-medium mt-8">
+        <button
+          onClick={handleCompleteBooking}
+          className="w-full py-3 bg-[#c6c6c6] rounded text-black font-medium mt-8 hover:bg-[#b6b6b6]"
+        >
           İşlemleri Tamamla
         </button>
 
-        <div className="mt-4">
-          <p className="text-sm text-gray-600">
-            Seçilen Koltuklar: {selectedSeats.join(", ")}
-          </p>
-          <p className="text-lg font-medium mt-2">
-            Toplam Tutar: {selectedSeats.length * 1000} TL
-          </p>
+        <div className="mt-4 p-4 rounded-lg bg-[#c6c6c6]">
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <div className="flex flex-wrap gap-2">
+                {selectedSeats.map((seatId) => (
+                  <div
+                    key={seatId}
+                    className="w-8 h-8 flex items-center justify-center text-black bg-[#ffc95b] rounded text-sm font-medium"
+                  >
+                    {seatId}
+                  </div>
+                ))}
+              </div>
+              <span className="text-black font-medium">
+                {selectedSeats.length}x
+              </span>
+            </div>
+            <div className="flex justify-end">
+              <span className="text-black font-medium">
+                {selectedSeats.length * 1000} TL
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
